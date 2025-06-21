@@ -1,159 +1,177 @@
 import { defineStore } from 'pinia'
+import { jwtDecode } from 'jwt-decode'
+
 import { authApi } from '../api'
 import router from '../router'
-import { ElMessage } from 'element-plus'
 
 
+const MAX_RETRY = 3
+const BASE_DELAY = 1000
+const REFRESH_CHECK_INTERVAL = 5 * 60 * 1000
 
 export const useAuthStore = defineStore('auth', {
 
   state: () => ({
-    registerOk: false,                                                   // 是否注册成功
-    loginAction: 'refresh',                                              // 登录完成后动作，默认刷新
-    token: localStorage.getItem('token') || null,                        // 用户jwt-token
-    refreshToken: localStorage.getItem('refreshToken') || null,          // 用户刷新token
-    userInfo: JSON.parse(localStorage.getItem('userInfo') || 'null'),    // 个人用户信息
-    lastActivity: localStorage.getItem('lastActivity') || null           // 最后在线时间
+    registerOk: false,
+    token: '',
+    action: 'refresh',
+    refreshToken: '',
+    userInfo: {},
+    retryCnt: 1,
+    refreshInterval: null,
+    isAuthenticated: false,
+    lastActivity: Date.now(),
+    refreshPromise: null
   }),
 
   getters: {
-    // 计算属性
-    isAuthenticated(state) {
-      return !!state.token
-    },
-
-    isTokenExpired (state) {
+    tokenExpired(state) {
       if(!state.token) return true
       try {
-        const decoded = JSON.parse(atob(state.token.split('.')[1]))
-        return decoded.exp * 1000 < Date.now()
-      }catch(error) {
-        console.error(`token是否过期检查报错，${error}`)
+        const { exp } = jwtDecode(state.token)
+        return exp * 1000 < Date.now()
+      } catch(error) {
+        console.error('token解析出错，', error)
+        return true
+      }
+    },
+    refreshTokenExpired(state) {
+      if(!state.refreshToken) return true
+      try {
+        const { exp } = jwtDecode(state.refreshToken)
+        return exp * 1000 < Date.now()
+      } catch(error) {
+        console.error('刷新token解析出错，', error)
         return true
       }
     },
   },
   
   actions: {
-    init() {
-      if (this.isAuthenticated) {
-        if(this.isTokenExpired)
-          this.refreshTheToken()
-        // 隔5分钟进行token检查
-        setInterval(() =>{
-          if(this.isTokenExpired)
-              this.refreshTheToken()
-        }, 300000)
-      }
 
-      // 监听用户活动
-      window.addEventListener('mousemove', this.updateLastActivity)
-      window.addEventListener('keydown', this.updateLastActivity)
+    setAutoRfresh(){
+      if (this.refreshInterval) clearInterval(this.refreshInterval)
+      this.refreshInterval = setInterval(async () => {
+        // console.log('online状态检查')
+        if(!this.refreshTokenExpired) {
+          if(this.tokenExpired) {
+            try{
+              await this.refreshTheToken()
+            } catch(error) {
+              console.error('自动刷新失败', error)
+              this.clearAuth()
+              clearInterval(this.refreshInterval)
+            }
+          }
+        } else {
+          this.clearAuth()
+        }
+      }, REFRESH_CHECK_INTERVAL)
     },
 
-    // 静默刷新token
-    async refreshTheToken() {
+    async beat(){
+      // console.log('扑通扑通')
       try{
-        if(!this.isAuthenticated) return
+        const resp = await authApi.heartbeat()
+        this.lastActivity = Date.now()
+        return resp.status === 200
+      } catch(error) {
+        console.error('检查在线状态失败，', error)
+        this.isAuthenticated = false
+      }
+    },
 
-        if (!this.refreshToken){
-          ElMessage.error('刷新token已过期')
-          router.push('/notready').then(() => {
-              window.location.reload()
+    async _doRefresh() {
+      
+      for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+        try {
+          const resp = await authApi.refresh(this.refreshToken, {
+            timeout: 6000 // 单独设置刷新请求的超时
           })
-          return
+          
+          if (resp.status === 201) {
+            this.setAuth(resp.data)
+            return resp.data.token
+          }
+          throw new Error(`刷新失败，状态码: ${resp.status}`)
+          
+        } catch (error) {
+          if (attempt === MAX_RETRY) {
+            this.clearAuth()
+            throw error
+          }
+          
+          await new Promise(resolve => 
+            setTimeout(resolve, BASE_DELAY * Math.pow(2, attempt)))
         }
+      }
+    },
 
-        const resp = await authApi.refresh()
-        if (resp.status === 201){
-          console.log('token刷新')
-          this.setAuth({
-            token: resp.token,
-            refreshToken: resp.refreshToken,
-            userInfo: resp.userInfo
-          })
+    // 静默刷新
+    async refreshTheToken() {
+      if(this.refreshPromise){
+        // console.log('在刷新token了，等一下')
+        return this.refreshPromise
+      }
 
+      // console.log('进行token刷新操作')
+
+      try {
+        this.refreshPromise = this._doRefresh()
+        return await this.refreshPromise
+      } finally {
+        this.refreshPromise = null
+      }
+    },
+
+    async logout() {
+      try {
+        const resp = await authApi.logout()
+        if (resp.status === 200){
+          this.clearAuth()
+          this.lastActivity = resp.data.last_activity
+          router.go(0)
         }
       } catch(error) {
-        this.clearAuth()
-        console.error(`静默刷新出错，${error}`)
+        console.error('退出出错，', error.stack)
       }
-    },
-
-    // 强制退出登录
-    async forceLogout() {
-      this.clearAuth()
-      router.push({name: 'NotAuthorized'})
-    },
-
-    // 更新最后活动时间
-    updateLastActivity() {
-      this.lastActivity = Date.now()
-      localStorage.setItem('lastActivity', this.lastActivity)
     },
 
     clearAuth() {
-      console.log('storage清理操作')
-
-      this.token = null
-      this.refreshToken = null
-      this.userInfo = null
-      this.registerOk = false
-
-      localStorage.clear()
+      // console.log('用户信息清理操作')
+      this.isAuthenticated = false
+      this.retryCnt = 0
+      if(this.token) this.token = ''
+      if (this.refreshToken) this.refreshToken = ''
+      if(this.userInfo) this.userInfo = {}
+      this.lastActivity = Date.now()
+      clearInterval(this.refreshInterval)
+      this.refreshInterval = null
     },
 
-    // 设置用户信息
+    // 按需设置
     setAuth(data) {
+      // console.log('用户信息设置')
 
-      // 更新 Token
-      if (data.token && typeof data.token === 'string') {
-        this.registerOk = false
+      if(data.token)
         this.token = data.token
-        localStorage.setItem('token', data.token)
-        console.log('保存了一个token, ')
-      }
-
-      // 更新refreshToken
-      if (data.refreshToken && typeof data.refreshToken === 'string') {
-        this.registerOk = false
+      
+      if(data.refreshToken)
         this.refreshToken = data.refreshToken
-        localStorage.setItem('refreshToken', data.refreshToken)
-        console.log('刷新token已保存')
-      }
 
-      // 更新 UserInfo
-      if (data.userInfo && typeof data.userInfo === 'object') {
-        try {
-          this.userInfo = data.userInfo
-          localStorage.setItem('userInfo', JSON.stringify(data.userInfo))
-        } catch (error) {
-          console.error('用户信息存储失败:', error)
-        }
-      } else if (data.userInfo === null) {
-        this.userInfo = null
-        localStorage.removeItem('userInfo')
-      }
+      this.retryCnt = 0
+      this.userInfo = data.userInfo
+      this.isAuthenticated = true
+      this.lastActivity = Date.now()
+      this.userInfo.avatar = `http://localhost:8088/static/images/${this.userInfo.avatar}`
+      this.setAutoRfresh()
     },
 
     // 用户头像更新
     updateAvatar(filename) {
-      if(!filename) {
-        console.error('filename为空')
-        return
-      }
-
-      if (!this.userInfo){
-        console.error('用户信息不存在，无法更新头像')
-        return
-      }
-
-      this.userInfo.avatar = filename
-
-      const userData = JSON.parse(localStorage.getItem('userInfo'))
-      userData.avatar = filename
-      this.userInfo = userData
-      localStorage.setItem('userInfo', JSON.stringify(userData))
+      this.userInfo.avatar = `http://localhost:8088/static/images/${filename}`
     },
-  }
+  },
+
+  persist: true
 })

@@ -24,3 +24,8 @@ dist-ssr
 *.sw?
 
 .vscode
+
+# 组件
+src/components/Plugins/CodeBlock.vue
+src/components/Test
+.env.development

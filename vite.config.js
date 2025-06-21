@@ -6,6 +6,18 @@ import vue from '@vitejs/plugin-vue'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // server:{
+  //   host: '0.0.0.0',
+  //   headers: {
+  //     'Access-Control-Allow-Origin': '*',
+  //     'Access-Control-Allow-Headers': '*',
+  //   }
+  // },
+  build: {
+    sourcemap: true,
+    // outDir: 'dist',
+    // assetsDir: 'assets'
+  },
   plugins: [
     vue(),
     AutoImport({

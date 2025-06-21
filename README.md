@@ -1,27 +1,5 @@
-# the-front-end
+# Vue 3 + Vite
 
-博客系统的web界面，提供文章浏览、评论互动、个人中心等功能。
+This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
 
-## 技术栈
-- **框架**: Vue3 + Pinia + Vue Router
-- **UI 库**: Element Plus
-- **API 管理**: Axios 模块化封装
-
-## 开发环境
-```bash
-# 安装依赖
-npm install
-
-# 启动开发服务器
-npm dev
-
-# 构建生产版本
-npm build
-```
-
-## 功能模块
-| 模块       | 路由路径          | 核心功能                          |
-|------------|-------------------|-----------------------------------|
-| 文章列表   | `/articles`       | 分页/搜索/分类筛选                |
-| 文章详情   | `/article/:id`    | 评论/点赞/分享                    |
-| 用户中心   | `/user/profile`   | 头像管理/文章草稿                 |
+Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
