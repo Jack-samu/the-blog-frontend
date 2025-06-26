@@ -8,7 +8,7 @@
       </template>
       <template #extra>
         <div>
-          <el-button type="primary" @click="saveContent">草稿保存</el-button>
+          <el-button type="primary" @click="saveDraft()">草稿保存</el-button>
           <post-modal :article="article" :text="text" @publish="publishArticle" @save="saveDraft" />
         </div>
       </template>
@@ -42,18 +42,21 @@ const article = reactive({
   cover: '',
   category: '',
   tags: [],
-  is_draft: false,
   imgs: []
 })
 
+// todolist后续补上post的edit后再edit判决
 watch(() => route.params.id, async () => {
   try{
     if(route.params.id){
-      
-      const resp = await articleApi.getArticle(route.params.id)
+      let resp
+      if (route.query.mode === 'post')
+        resp = await articleApi.getDetail(route.params.id)
+      else if (route.query.mode === 'draft')
+        resp = await articleApi.getDraft(route.params.id)
+
       if (resp.status === 200){
         Object.assign(article, resp.data.article)
-        article.is_draft = true
         text.value = '上传文章'
       }
     }
@@ -113,7 +116,33 @@ const uploadImg = async() =>{
 }
 
 // 草稿保存
-const saveContent = async () => {
+// const saveContent = async () => {
+
+//   if (article.content === ''){
+//     ElMessage.warning('你啥都没写呢')
+//     return
+//   }
+
+//   try {
+//     await uploadImg()
+
+//     const resp = await articleApi.saveArticle({
+//       content: article.content
+//     })
+
+//     if (resp.status === 201) {
+//       ElMessage.success({
+//         message: '草稿已上传至服务器',
+//         duration: 3000,
+//       })
+//       article.id = resp.data.id
+//     }
+//   } catch(error) {
+//     console.error('保存草稿主体出错', error.stack)
+//   }
+// }
+
+const saveDraft = async (articleExtra = {}) => {
 
   if (article.content === ''){
     ElMessage.warning('你啥都没写呢')
@@ -123,38 +152,11 @@ const saveContent = async () => {
   try {
     await uploadImg()
 
-    const resp = await articleApi.saveArticle({
-      content: article.content,
-      is_draft: true,
-    })
+    const payload = Object.keys(articleExtra).length > 0
+      ? {...articleExtra, content:article.content}
+      : {...article}
 
-    if (resp.status === 201) {
-      ElMessage.success({
-        message: '草稿已上传至服务器',
-        duration: 3000,
-      })
-      article.id = resp.data.id
-    }
-  } catch(error) {
-    console.error('保存草稿主体出错', error.stack)
-  }
-}
-
-const saveDraft = async (articleExtra) => {
-
-  if (article.content === ''){
-    ElMessage.warning('你啥都没写呢')
-    return
-  }
-
-  try {
-    await uploadImg()
-
-    const resp = await articleApi.saveArticle({
-      ...articleExtra,
-      content: article.content,
-      is_draft: true
-    })
+    const resp = await articleApi.saveArticle(payload)
 
     if (resp.status === 201) {
       ElMessage.success({
@@ -177,20 +179,20 @@ const publishArticle = async (articleExtra) => {
   }
 
   try {
-    await uploadImg()
-
-    const resp = await articleApi.publishArticle({
+    const payload = {
       ...articleExtra,
       content: article.content
-    })
+    }
+    await uploadImg()
+
+    const resp = await articleApi.publishArticle(payload)
 
     if (resp.status === 201) {
       ElMessage.success({
         message: '文章已发表，即将跳转',
         duration: 6000,
       })
-      let title = encodeURIComponent(resp.data.title)
-      router.push({path: `/articles/${title}`})
+      router.push({path: `/article/${resp.data.id}`})
     }
   } catch(error) {
     console.error('文章发布', error.stack)

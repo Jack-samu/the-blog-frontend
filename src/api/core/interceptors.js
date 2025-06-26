@@ -48,7 +48,7 @@ export const setupInterceptors = (instance) => {
             if (error.response?.status !== 401 || originalReq._retry) {
                 console.error('认证错误以外错误', error)
                 // 不能用reject，会继续执行
-                throw new Error('401以外报错')
+                return Promise.reject(error)
             }
 
             if (error.response?.status === 401 && originalReq.url.includes('logout')){

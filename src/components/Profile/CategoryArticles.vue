@@ -9,7 +9,7 @@
             </template>
             <!-- <p>{{ topic.description }}</p> -->
             <div v-for="(article, idx) in topic.articles" :key="idx">
-                <el-link type="primary" :href="`/article/${encodeURIComponent(article.title)}`"
+                <el-link type="primary" :href="`/article/${article.id}`"
                     style="font-size: 16px;">
                     {{ article.title }}
                 </el-link>

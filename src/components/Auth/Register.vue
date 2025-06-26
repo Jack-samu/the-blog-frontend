@@ -158,7 +158,7 @@ const submit = async () => {
                 'image': form.value.avatar
             })
             if (resp.status === 201)
-                formData.append('avatar', resp.data.filename)
+                formData.avatar = resp.data.filename
         }
 
         const resp = await authApi.register(formData)

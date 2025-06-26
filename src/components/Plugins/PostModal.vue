@@ -5,7 +5,8 @@
          class="post-form" 
          :model="form" 
          :rules="rules"
-         ref="formRef">
+         ref="formRef"
+         @submit.prevent>
 
          <!-- 封面和摘要一栏 -->
             <div 
@@ -111,14 +112,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onUnmounted } from 'vue'
+import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Picture as IconPicture } from '@element-plus/icons-vue'
 import { Upload, Delete } from '@element-plus/icons-vue'
 import { articleApi } from '../../api'
 
 
-
+// todolist要进行提交后马上重置的一个调整
 const formRef = ref(null)
 const coverUrl = ref('')
 const uploadRef = ref(null)
@@ -142,23 +143,26 @@ const props = defineProps({
     }
 })
 
-const form = reactive({
+const form = ref({
     id: 0,
     title: '',
     excerpt: '',
     category: '',
     tags: [],
-    cover: '',
-    is_draft: true
+    cover: ''
 })
+
+//todolist，修正publish一个draft的时候没得cover的情况
 watch(() => props.article, () => {
-    form.id = props.article.id
-    form.title = props.article.title
-    form.excerpt = props.article.excerpt
-    form.category = props.article.category
-    form.tags = props.article.tags
-    if (props.article?.cover)
+    form.value.id = props.article.id
+    form.value.title = props.article.title
+    form.value.excerpt = props.article.excerpt
+    form.value.category = props.article.category
+    form.value.tags = props.article.tags
+    if (props.article?.cover){
         coverUrl.value = `http://localhost:8088/static/images/${props.article?.cover}`
+        form.value.cover = props.article.cover
+    }
 }, {immediate: true, deep: true})
 
 const emits = defineEmits(['publish', 'save'])
@@ -173,22 +177,21 @@ const rules = {
 }
 
 const resetForm = () => {
-    form.id = 0
-    form.title = ''
-    form.cover = ''
-    form.excerpt = ''
-    form.category = ''
-    form.tags = []
-    form.is_draft= true
+    form.value.id = 0
+    form.value.title = ''
+    form.value.cover = ''
+    form.value.excerpt = ''
+    form.value.category = ''
+    form.value.tags = []
     coverUrl.value = null
 }
 
 const uploadCover = async () => {
     
     try {
-        if(!form.cover instanceof File || !(form.cover && form.cover.constructor && form.cover.constructor.name==='File')) return
+        if(!form.value.cover instanceof File || !(form.value.cover && form.value.cover.constructor && form.value.cover.constructor.name==='File')) return
         // 文章封面上传，要解决一下出错后需要重新上传图片的问题
-        const resp = await articleApi.uploadImage({'image': form.cover})
+        const resp = await articleApi.uploadImage({'image': form.value.cover})
         if (resp.status !== 201) {
             ElMessage.error({
                 message: '封面上传出错',
@@ -197,7 +200,7 @@ const uploadCover = async () => {
             return
         }
         // 替换下来，进行publish表单的提交
-        form.cover = resp.data.filename
+        form.value.cover = resp.data.filename
         coverUrl.value = `http://localhost:8088/static/images/${resp.data.filename}`
     } catch(error) {
         console.error('文章封面上传出错，', error.stack)
@@ -210,8 +213,9 @@ const submit = async () =>{
         // 表单数据校验
         await formRef.value.validate()
         await uploadCover()
-        form.is_draft = false
-        emits('publish', form)
+        visibleOrNot.value = false
+        emits('publish', form.value)
+        resetForm()
     } catch(error) {
         console.error('文章发表出错，', error)
     }
@@ -224,12 +228,12 @@ const save = async () =>{
         await uploadCover()
 
         const formData = {
-            id: form.id,
-            title: form.title,
-            excerpt: form.excerpt,
-            cover: form.cover,
-            category: form.category,
-            tags: [...form.tags]
+            id: form.value.id,
+            title: form.value.title,
+            excerpt: form.value.excerpt,
+            cover: form.value.cover,
+            category: form.value.category,
+            tags: [...form.value.tags]
         }
         emits('save', formData)
     } catch(error) {
@@ -248,7 +252,7 @@ const imageCache = (file) => {
     const reader = new FileReader()
     reader.onload = (event) => {
         coverUrl.value = event.target.result
-        form.cover = file
+        form.value.cover = file
     }
 
     reader.onerror = (error) => {
@@ -286,7 +290,7 @@ const uploadCoverByDrop = (event) => {
 // 头像移除
 const removeCover = () => {
     coverUrl.value = ''
-    form.cover = null
+    form.value.cover = null
 }
 
 // onUnmounted(() => {

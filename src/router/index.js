@@ -16,7 +16,7 @@ import { useAuthStore } from "../stores/auth"
 
 const routes = [
     {path: '/', name: 'Home', component: Home},
-    {path: '/article/:title', name: 'PostDetail', component: PostDetail, props: true},
+    {path: '/article/:id', name: 'PostDetail', component: PostDetail, props: true},
     {path: '/post/edit', name:'EditNew', component: PostEditor, meta: {requiresAuth: true}},
     {path: '/post/edit/:id', name:'EditOld', component: PostEditor, meta: {requiresAuth: true}},
     {path: '/notready', name: 'NotAuthorized', component: NotAuthorized},
@@ -50,11 +50,6 @@ router.beforeEach( async (to) => {
 
         auth.clearAuth()
         return {name: 'Home', query: {redirect: to.fullPath}}
-
-        // return {
-        //     name: 'Auth',
-        //     query: {redirect: to.fullPath}
-        // }
     }
 
     return true

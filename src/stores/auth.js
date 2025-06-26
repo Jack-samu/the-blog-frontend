@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { jwtDecode } from 'jwt-decode'
+import { markRaw } from 'vue'
 
 import { authApi } from '../api'
 import router from '../router'
@@ -8,6 +9,7 @@ import router from '../router'
 const MAX_RETRY = 3
 const BASE_DELAY = 1000
 const REFRESH_CHECK_INTERVAL = 5 * 60 * 1000
+const HEARTBEAT_INTERVAL = 3 * 60 * 1000
 
 export const useAuthStore = defineStore('auth', {
 
@@ -17,14 +19,15 @@ export const useAuthStore = defineStore('auth', {
     action: 'refresh',
     refreshToken: '',
     userInfo: {},
-    retryCnt: 1,
-    refreshInterval: null,
-    isAuthenticated: false,
     lastActivity: Date.now(),
+    heartbeatInterval: null,
     refreshPromise: null
   }),
 
   getters: {
+    isAuthenticated(state) {
+      return !!state.token && !this.tokenExpired
+    },
     tokenExpired(state) {
       if(!state.token) return true
       try {
@@ -45,39 +48,49 @@ export const useAuthStore = defineStore('auth', {
         return true
       }
     },
+    timeToRfresh() {
+      return !this.refreshTokenExpired && this.tokenExpired
+    },
   },
   
   actions: {
 
-    setAutoRfresh(){
-      if (this.refreshInterval) clearInterval(this.refreshInterval)
-      this.refreshInterval = setInterval(async () => {
-        // console.log('online状态检查')
-        if(!this.refreshTokenExpired) {
-          if(this.tokenExpired) {
-            try{
-              await this.refreshTheToken()
-            } catch(error) {
-              console.error('自动刷新失败', error)
-              this.clearAuth()
-              clearInterval(this.refreshInterval)
-            }
-          }
-        } else {
-          this.clearAuth()
-        }
-      }, REFRESH_CHECK_INTERVAL)
+    async init() {
+      this.clearTimers()
+
+      if (this.refreshToken && !this.refreshTokenExpired) {
+        if (this.tokenExpired) await this.refreshTheToken().catch(() => this.clearAuth())
+      } else {
+        this.clearAuth()
+      }
+
+      if (this.isAuthenticated) this.setupTimers()
+    },
+
+    setupTimers() {
+
+      if(this.isAuthenticated) {
+        this.heartbeatInterval = setInterval(async () =>{
+          await this.beat()
+        }, HEARTBEAT_INTERVAL)
+      }
+    },
+
+    clearTimers() {
+      if(this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval)
+        this.heartbeatInterval = null
+      }
     },
 
     async beat(){
-      // console.log('扑通扑通')
       try{
         const resp = await authApi.heartbeat()
         this.lastActivity = Date.now()
         return resp.status === 200
       } catch(error) {
         console.error('检查在线状态失败，', error)
-        this.isAuthenticated = false
+        return false
       }
     },
 
@@ -97,7 +110,6 @@ export const useAuthStore = defineStore('auth', {
           
         } catch (error) {
           if (attempt === MAX_RETRY) {
-            this.clearAuth()
             throw error
           }
           
@@ -110,18 +122,38 @@ export const useAuthStore = defineStore('auth', {
     // 静默刷新
     async refreshTheToken() {
       if(this.refreshPromise){
-        // console.log('在刷新token了，等一下')
         return this.refreshPromise
       }
 
-      // console.log('进行token刷新操作')
-
       try {
-        this.refreshPromise = this._doRefresh()
-        return await this.refreshPromise
+        const promise = this._doRefresh()
+        this.refreshPromise = markRaw(promise)
+        return await promise
       } finally {
         this.refreshPromise = null
       }
+    },
+
+    // 按需设置
+    setAuth(data) {
+
+      this.token = data.token || this.token
+      this.refreshToken = data.refreshToken || this.refreshToken
+      this.userInfo = data.userInfo || this.userInfo
+      this.lastActivity = Date.now()
+
+      this.clearTimers()
+      if(this.isAuthenticated) this.setupTimers()
+
+      if(this.userInfo.avatar)
+        this.updateAvatar(this.userInfo.avatar)
+    },
+
+    clearAuth() {
+      this.token = ''
+      this.refreshToken = ''
+      this.userInfo = {}
+      this.clearTimers()
     },
 
     async logout() {
@@ -137,41 +169,13 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    clearAuth() {
-      // console.log('用户信息清理操作')
-      this.isAuthenticated = false
-      this.retryCnt = 0
-      if(this.token) this.token = ''
-      if (this.refreshToken) this.refreshToken = ''
-      if(this.userInfo) this.userInfo = {}
-      this.lastActivity = Date.now()
-      clearInterval(this.refreshInterval)
-      this.refreshInterval = null
-    },
-
-    // 按需设置
-    setAuth(data) {
-      // console.log('用户信息设置')
-
-      if(data.token)
-        this.token = data.token
-      
-      if(data.refreshToken)
-        this.refreshToken = data.refreshToken
-
-      this.retryCnt = 0
-      this.userInfo = data.userInfo
-      this.isAuthenticated = true
-      this.lastActivity = Date.now()
-      this.userInfo.avatar = `http://localhost:8088/static/images/${this.userInfo.avatar}`
-      this.setAutoRfresh()
-    },
-
-    // 用户头像更新
     updateAvatar(filename) {
-      this.userInfo.avatar = `http://localhost:8088/static/images/${filename}`
+      if(this.userInfo)
+        this.userInfo.avatar = `http://localhost:8088/static/images/${filename}`
     },
   },
 
-  persist: true
+  persist: {
+    paths: ['token', 'refreshToken', 'userInfo', 'lastActivity']
+  }
 })

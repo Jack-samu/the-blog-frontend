@@ -13,7 +13,7 @@
           <li v-for="article in articles" :key="article.id">
             <el-card style="padding: 5px;">
               <div class="post-title">
-                <el-link type="primary" @click.prevent="getArticle(article.title)">
+                <el-link type="primary" @click.prevent="getArticle(article.id)">
                   <h1>
                     {{ article.title }}
                   </h1>
@@ -71,9 +71,8 @@ const currentPage = ref(1)
 const loading = ref(false)
 const router = useRouter()
 
-const getArticle = (title) => {
-  const title_uri = encodeURIComponent(title)
-  router.push({ name: 'PostDetail', params: { title: title_uri } })
+const getArticle = (id) => {
+  router.push({ name: 'PostDetail', params: { id: id } })
 }
 
 const formatTime = (time) => {

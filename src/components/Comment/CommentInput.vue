@@ -1,6 +1,6 @@
 <template>
     <div style="border-bottom: 1px solid #f0f0f0;">
-        <el-form v-show="type=== 'edit'">
+        <el-form v-show="type=== 'edit'" @submit.prevent>
             <el-form-item>
                 <el-input 
                  :type="typeValue" 
@@ -81,6 +81,7 @@ onMounted(() => {
 })
 
 const submit = () => {
+    // event.preventDefault()
     if(!content.value.trim())return
     emits('submit-content', content.value)
     content.value = props.content

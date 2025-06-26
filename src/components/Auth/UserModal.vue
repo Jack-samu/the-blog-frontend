@@ -86,7 +86,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { authApi } from '../../api'
 import {User, SwitchButton} from '@element-plus/icons-vue'
@@ -188,6 +188,10 @@ const handleUserMsg = async (command) => {
     console.error(error)
   }
 }
+
+onMounted(() =>{
+  if (auth.isAuthenticated) visibleOrNot.value = false
+})
 </script>
 
 <style scoped>

@@ -180,7 +180,7 @@ const goHome = () => {
 
 // 进行文章的更新编辑
 const toEdit = () => {
-    router.push({path: `/post/edit/${article.value.id}`})
+    router.push(`/post/edit/${article.value.id}?mode=post`)
 }
 
 // 字数统计
@@ -231,10 +231,10 @@ const buildTocTree = (headings) => {
 
 onMounted(async () => {
 
-    const resp = await articleApi.getDetail(route.params.title)
+    const resp = await articleApi.getDetail(route.params.id)
     if (resp.status === 200) {
         article.value = resp.data.article
-        currentUrl.value = window.location.origin + '/article/' + resp.data.article.title
+        currentUrl.value = window.location.origin + '/article/' + resp.data.article.id
         loading.value = false
     }
 })

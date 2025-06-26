@@ -1,13 +1,14 @@
 <template>
-    <el-table :data="drafts" stripe>
+    <el-table :data="drafts" style="width: 100%;" stripe>
         <el-table-column type="index" width="50" />
-        <el-table-column prop="title" label="标题" width="300">
+        <el-table-column prop="title" label="标题" width="200">
             <template #default="{ row }">
-                <el-link type="danger" :href="`/article/${encodeURIComponent(row.title)}`">{{ row.title }}</el-link>
+                <el-link type="danger" href="#">{{ row.title ? row.title : '佚名' }}</el-link>
             </template>
         </el-table-column>
-        <el-table-column prop="updated_at" label="最后修改时间" :formatter="formatTime" />
-        <el-table-column label="操作">
+        <el-table-column prop="created_at" label="创建时间" :formatter="formatTime" width="160" />
+        <el-table-column prop="updated_at" label="最后修改时间" :formatter="formatTime" width="160" />
+        <el-table-column label="操作" fixed="right">
             <template #default="scope">
                 <el-button size="small" type="primary" @click="editDraft(scope.row.id)">编辑</el-button>
                 <el-button size="small" type="primary" @click="deleteDraft(scope.row.id)">删除</el-button>
@@ -69,7 +70,7 @@ const formatTime = (row, column, time) => {
 }
 
 const editDraft = (id) => {
-    router.push({ path: `/post/edit/${id}` })
+    router.push(`/post/edit/${id}?mode=draft`)
 }
 
 const deleteDraft = async (id) => {
@@ -81,7 +82,7 @@ const deleteDraft = async (id) => {
             type: 'warning'
         })
 
-        const resp = await articleApi.delete(id)
+        const resp = await articleApi.deleteDraft(id)
         if (resp.status === 201){
             await fetchDrafts()
             emit('data-refresh')

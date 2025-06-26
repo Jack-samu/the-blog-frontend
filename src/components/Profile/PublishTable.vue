@@ -3,7 +3,7 @@
         <el-table-column type="index" width="50" />
         <el-table-column prop="title" label="标题" width="300">
             <template #default="{ row }">
-                <el-link type="primary" @click.prevent="viewArticle(row.title)">{{ row.title }}</el-link>
+                <el-link type="primary" @click.prevent="viewArticle(row.id)">{{ row.title ? row.title : '佚名' }}</el-link>
             </template>
         </el-table-column>
         <el-table-column prop="category" label="分类" width="100" />
@@ -58,13 +58,12 @@ const handlePageChange = (page) => {
     fetchPublished()
 }
 
-const viewArticle = (title) => {
-  const title_uri = encodeURIComponent(title)
-  router.push({ name: 'PostDetail', params: { title: title_uri } })
+const viewArticle = (id) => {
+  router.push({ name: 'PostDetail', params: { id: id } })
 }
 
 const editArticle = (id) => {
-    router.push({ path: `/post/edit/${id}` })
+    router.push(`/post/edit/${id}?mode=post`)
 }
 
 const deleteArticle = async (id) => {
@@ -76,7 +75,7 @@ const deleteArticle = async (id) => {
             type: 'warning'
         })
 
-        const resp = await articleApi.delete(id)
+        const resp = await articleApi.deletePublish(id)
         if (resp.status === 201)
             emit('data-refresh')
     } catch (error) {
